@@ -1,9 +1,9 @@
 # Microservices Architecture Design Patterns
 
 ## [Decomposition Patterns](#1-order-service-for-the-order-subdomains)
-- [Decompose by Business Capability](#2-payment-service-for-the-payment-subdomain)
+- [Decompose by Business Capability](#decompose-by-business-capability--why-how-and-what-with-a-java-example)
 - [Decompose by Subdomain](#how-subdomains-communicate)
-- Decompose by Transaction
+- [Decompose by Transaction](#decompose-by-transaction--why-how-and-what-with-a-java-example)
 - Strangler Pattern
 - Bulkhead Pattern
 - Sidecar Pattern
@@ -37,9 +37,9 @@
 - Canary Deployment Pattern
 
 
-### <a id="#1-order-service-for-the-order-subdomains"> **Decompose by Business Capability** – Why, How, and What (with a Java Example)</a>
+### <a id=""> **Decompose by Business Capability** – Why, How, and What (with a Java Example)</a>
 
-**<a id="#2-payment-service-for-the-payment-subdomain">Why Decompose by Business Capability?**</a>
+**<a id="decompose-by-business-capability--why-how-and-what-with-a-java-example">Why Decompose by Business Capability?**</a>
 
 The *Decompose by Business Capability* pattern is used to break down large monolithic applications into smaller, self-contained microservices based on core business functionalities or capabilities. This is important because it aligns microservices with the business, making systems more agile, scalable, and maintainable. Each microservice is responsible for a specific business capability and can evolve independently without impacting others.
 
@@ -338,3 +338,168 @@ Decomposing by subdomain ensures that your application’s services are logicall
 
 
 
+### <a id="">**Decompose by Transaction** – Why, How, and What (with a Java Example)</a>
+
+---
+
+### <a id="#decompose-by-transaction--why-how-and-what-with-a-java-example">**Why Decompose by Transaction?**</a>
+
+The *Decompose by Transaction* pattern is used to break down a monolithic application into smaller microservices by focusing on transactions or business operations that need to be isolated and handled independently. Transactions often involve multiple steps or processes, and if we decompose the system by transaction boundaries, each service can handle one or more of these processes. This decomposition provides:
+- **Better isolation**: Each service is responsible for completing a specific transaction.
+- **Reduced complexity**: The logic for each transaction is encapsulated within its own service, making the system easier to maintain.
+- **Improved scalability**: Services can scale independently based on the transaction's demand.
+
+By decomposing by transaction, we ensure that critical business processes (transactions) are managed efficiently, while also enhancing the modularity and fault tolerance of the system.
+
+---
+
+### **How to Decompose by Transaction?**
+
+To apply this pattern, you need to follow these steps:
+
+1. **Identify transactional boundaries**: Look at the different transactions in your application, which often involve multiple steps. For example, in an e-commerce system, a transaction could involve *placing an order*, *processing payment*, *updating inventory*, and *shipping the product*.
+   
+2. **Group operations into services**: Each transaction consists of multiple steps. Group these steps into distinct services based on their functionality. For example, the payment process might be handled by a `Payment Service`, while updating stock might be handled by an `Inventory Service`.
+
+3. **Design services with transactional integrity**: Each service needs to ensure that the transaction it handles is either completed successfully or rolled back in case of failure. Microservices can ensure transactional integrity using patterns like **Sagas** (a series of compensating transactions to handle rollbacks) instead of traditional two-phase commit transactions.
+
+4. **Use messaging or APIs for communication**: Transactions often require coordination between multiple services. This communication can be done asynchronously (via messaging queues like Kafka or RabbitMQ) or synchronously (via REST APIs).
+
+---
+
+### **What is Decompose by Transaction?**
+
+When decomposing by transaction, you break an application down into microservices where each service handles a specific business transaction or a set of related operations. This allows the transaction logic to be isolated into smaller, manageable services. Each service can focus on a single responsibility (for example, payments, inventory updates, or shipment).
+
+For example, in an online banking system:
+- **Account Service**: Handles account creation, balance management, and transaction history.
+- **Payment Service**: Manages money transfers, withdrawals, and deposits.
+- **Fraud Detection Service**: Monitors suspicious activities and validates transactions.
+
+Each service manages a specific type of transaction, ensuring modularity and a focus on independent business processes.
+
+---
+
+### **Example in Java**
+
+Let’s take the example of an online e-commerce system. In this system, we want to decompose by transaction. The key transactions might be:
+- **Order Placement**: Involves creating an order.
+- **Payment Processing**: Involves charging the customer.
+- **Inventory Update**: Reduces the stock of ordered items.
+
+Each of these transactions can be handled by a separate service.
+
+#### **1. Order Service**
+
+The **Order Service** is responsible for creating an order and coordinating with other services (like payment and inventory).
+
+```java
+@RestController
+@RequestMapping("/orders")
+public class OrderController {
+
+    @Autowired
+    private OrderService orderService;
+
+    @PostMapping
+    public ResponseEntity<String> placeOrder(@RequestBody OrderRequest orderRequest) {
+        // Place order logic
+        orderService.createOrder(orderRequest);
+        return new ResponseEntity<>("Order placed successfully", HttpStatus.CREATED);
+    }
+}
+```
+
+The `OrderService` class can internally call the `PaymentService` and `InventoryService`.
+
+#### **2. Payment Service**
+
+The **Payment Service** is responsible for processing payments.
+
+```java
+@RestController
+@RequestMapping("/payments")
+public class PaymentController {
+
+    @Autowired
+    private PaymentService paymentService;
+
+    @PostMapping
+    public ResponseEntity<String> processPayment(@RequestBody PaymentRequest paymentRequest) {
+        paymentService.processPayment(paymentRequest);
+        return new ResponseEntity<>("Payment processed successfully", HttpStatus.OK);
+    }
+}
+```
+
+The `PaymentService` might interact with external payment gateways or process payments directly.
+
+#### **3. Inventory Service**
+
+The **Inventory Service** handles stock updates.
+
+```java
+@RestController
+@RequestMapping("/inventory")
+public class InventoryController {
+
+    @Autowired
+    private InventoryService inventoryService;
+
+    @PostMapping("/update")
+    public ResponseEntity<String> updateInventory(@RequestBody InventoryUpdateRequest request) {
+        inventoryService.updateStock(request);
+        return new ResponseEntity<>("Inventory updated", HttpStatus.OK);
+    }
+}
+```
+
+In this approach, the services are isolated and handle individual parts of the transaction. Each transaction is handled in a different microservice:
+- **Order Service** creates the order.
+- **Payment Service** processes the payment.
+- **Inventory Service** updates the stock.
+
+#### **Handling Transaction Failures (Saga Pattern)**
+
+In a distributed system, ensuring transactional consistency can be difficult. Instead of traditional database transactions, microservices use **Sagas** to handle transaction rollbacks.
+
+In our example, if payment processing fails, we might want to cancel the order and roll back any updates made to inventory.
+
+```java
+@Service
+public class OrderService {
+
+    @Autowired
+    private PaymentClient paymentClient;
+
+    @Autowired
+    private InventoryClient inventoryClient;
+
+    public void createOrder(OrderRequest request) {
+        // 1. Create Order in database (not committed yet)
+        
+        try {
+            // 2. Process Payment
+            paymentClient.processPayment(request.getPaymentDetails());
+
+            // 3. Update Inventory
+            inventoryClient.updateStock(request.getProductId(), request.getQuantity());
+
+            // 4. Commit Order in database (if everything else succeeds)
+        } catch (Exception e) {
+            // Rollback actions (if payment or inventory fails)
+            cancelOrder(request.getOrderId());
+            throw new RuntimeException("Transaction failed: " + e.getMessage());
+        }
+    }
+}
+```
+
+In this case:
+- The **Saga** pattern ensures that if payment or inventory update fails, the system compensates for it by canceling the order, maintaining data consistency.
+
+---
+
+### **Conclusion**
+
+The *Decompose by Transaction* pattern breaks down a system based on transactional boundaries, isolating complex business processes into separate services. This allows for more maintainable, scalable, and resilient systems. By using patterns like **Sagas** for managing distributed transactions, we can ensure consistency across microservices without relying on traditional database transactions. Each microservice can independently manage a part of the business process, making the entire system more flexible and responsive to changes.
